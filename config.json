@@ -1,0 +1,172 @@
+{
+  "log": {
+    "level": "warn",
+	"output": "/tmp/sing-box.log",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "local",
+        "tag": "local_dns_resolver"
+      },
+      {
+        "type": "udp",
+        "tag": "direct_dns_resolver",
+        "server": "111.88.96.50",
+        "server_port": 53
+      },
+      {
+        "type": "https",
+        "tag": "doh",
+        "domain_resolver": "direct_dns_resolver",
+        "server": "moscow.server.top",
+        "server_port": 443,
+        "path": "/dns-query"
+      }
+    ],
+    "rules": [
+      {
+        "domain_suffix": [
+          "local",
+          "lan"
+        ],
+        "action": "route",
+        "server": "local_dns_resolver"
+      },
+      {
+        "rule_set": [
+          "ru-domains",
+          "geosite-ru"
+        ],
+        "action": "route",
+        "server": "doh"
+      }
+    ],
+    "final": "doh",
+    "strategy": "prefer_ipv4"
+  },
+  "certificate": {},
+    "http_clients": [
+    {
+      "tag": "client-moscow-hop-di",
+      "version": 2,
+      "detour": "moscow-hop-di"
+    }
+  ],
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "mtu": 1492,
+      "address": "172.16.0.1/30",
+      "auto_route": true,
+      "stack": "system"
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "moscow-hop-di",
+      "server": "moscow.server.top",
+      "server_port": 443,
+      "uuid": "xxxxxxxxxxxxxxxxxx",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "moscow.server.top",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "xxxxxxxxxxxxxxxxxx",
+          "short_id": "xxxxxxxxxxxxxxxxxx"
+        }
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct-out"
+    }
+  ],
+  "route": {
+	"default_http_client": "client-moscow-hop-di",
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "ip_is_private": true,
+        "action": "route",
+        "outbound": "direct-out"
+      },
+      {
+        "domain_suffix": [
+          "local",
+          "lan"
+        ],
+        "action": "route",
+        "outbound": "direct-out"
+      },
+      {
+        "rule_set": [
+          "ru-domains",
+          "geoip-ru",
+          "geosite-ru"
+        ],
+        "action": "route",
+        "outbound": "direct-out"
+      }
+    ],
+    "rule_set": [
+      {
+        "tag": "ru-domains",
+        "rules": [
+          {
+            "domain_suffix": [
+              "ru",
+              "xn--p1ai",
+              "su",
+              "xn--p1acf",
+              "xn--80adxhks",
+              "moscow",
+              "tatar",
+              "xn--d1acj3b",
+              "xn--80aswg",
+              "xn--c1avg",
+              "xn--j1aef"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "remote",
+        "tag": "geoip-ru",
+        "url": "https://raw.githubusercontent.com/metacubex/meta-rules-dat/sing/geo/geoip/ru.srs",
+        "update_interval": "24h0m0s"
+      },
+      {
+        "type": "remote",
+        "tag": "geosite-ru",
+        "url": "https://raw.githubusercontent.com/metacubex/meta-rules-dat/sing/geo/geosite/category-ru.srs",
+        "update_interval": "24h0m0s"
+      }
+    ],
+    "final": "moscow-hop-di",
+    "auto_detect_interface": true,
+    "default_domain_resolver": "doh"
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "store_dns": true
+    }
+  }
+}
