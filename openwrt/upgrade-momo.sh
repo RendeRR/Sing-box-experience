@@ -62,6 +62,8 @@ rm -rf $CONF_BACKUP/momo_dir
 cp -p /etc/config/momo $CONF_BACKUP/momo_config 2>/dev/null || true
 cp -rp /etc/momo $CONF_BACKUP/momo_dir 2>/dev/null || true
 cp -p /etc/apk/keys/momo.pem $CONF_BACKUP/momo.pem 2>/dev/null || true
+# Сохраняем файл кастомных репозиториев для восстановления после прошивки
+cp -p /etc/apk/repositories.d/customfeeds.list $CONF_BACKUP/customfeeds.list 2>/dev/null || true
 
 echo -e "\n${C_HEAD}=== 6. Protect files during sysupgrade ===${C_RESET}"
 if [ "$DRY_RUN" -eq 0 ]; then
@@ -103,7 +105,9 @@ if [ "$DRY_RUN" -eq 0 ]; then
     {
         echo "========== POST UPGRADE START $(date) =========="
         
-        echo "[1/6] Restoring configs..."
+        echo "[1/6] Restoring configs and repositories..."
+        mkdir -p /etc/apk/repositories.d
+        cp -p $CONF_BACKUP/customfeeds.list /etc/apk/repositories.d/customfeeds.list 2>/dev/null || true
         cp -p $CONF_BACKUP/momo.pem /etc/apk/keys/momo.pem 2>/dev/null || true
         cp -p $CONF_BACKUP/momo_config /etc/config/momo 2>/dev/null || true
         rm -rf /etc/momo
@@ -122,6 +126,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
 
         echo "[5/6] Cleaning up .apk-new garbage..."
         rm -f /etc/config/momo.apk-new
+        rm -f /etc/init.d/*.apk-new
         find /etc/momo -type f -name "*.apk-new" -exec rm -f {} \; 2>/dev/null || true
 
         echo "[6/6] Starting Momo..."
@@ -139,18 +144,25 @@ EOF
     echo "✅ Restore script injected."
 fi
 
-echo -e "\n${C_HEAD}=== 8. Hide unofficial packages from ASU ===${C_RESET}"
+echo -e "\n${C_HEAD}=== 8. Hide unofficial packages & repos from ASU ===${C_RESET}"
 if [ "$DRY_RUN" -eq 0 ]; then
     apk del $PKGS || true
     echo "✅ Custom packages removed locally."
 fi
+# Скрываем сторонние репозитории во временную папку (и для dry run, и для real run)
+mv /etc/apk/repositories.d/customfeeds.list /tmp/customfeeds.list.hidden 2>/dev/null || true
+echo "✅ Custom repositories hidden."
 
 echo -e "\n${C_HEAD}=== 9. ATTENDED SYSUPGRADE (OWUT) ===${C_RESET}"
 if [ "$DRY_RUN" -eq 1 ]; then
     owut check -r "$PKGS" --ignored-defaults "wpad-basic-mbedtls" --force $OWUT_ARGS || true
+    # Возвращаем файл репозиториев на место после проверки
+    mv /tmp/customfeeds.list.hidden /etc/apk/repositories.d/customfeeds.list 2>/dev/null || true
     echo -e "\n${C_OK}========== DRY RUN COMPLETE ==========${C_RESET}"
     echo "To execute real upgrade, run: $SCRIPT_PATH run $OWUT_ARGS"
 else
     echo -e "${C_WARN}WARNING: Building firmware...${C_RESET}"
     owut upgrade --ignored-defaults "wpad-basic-mbedtls" --force $OWUT_ARGS
+    # На случай, если owut упадет с ошибкой и не уйдет в перезагрузку — возвращаем файл
+    mv /tmp/customfeeds.list.hidden /etc/apk/repositories.d/customfeeds.list 2>/dev/null || true
 fi
